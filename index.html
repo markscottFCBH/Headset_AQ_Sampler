@@ -30,30 +30,33 @@
   const owner='markscottFCBH', repo='Headset_AQ_Sampler', branch='main';
 
   /* --- 1. parse metadata sheet (skip header row) --- */
-  let meta={};
+  let meta={};                                      // { filenameLower : {headset, sampleT} }
   try{
     const csv=await fetch(sheetCSV).then(r=>r.text());
     csv.trim().split('\n').slice(1).forEach(row=>{
       const cols=row.split(',');
       if(cols.length<2)return;
-      const headset=cols[0].trim(), file=cols[1].trim(), sampleT=(cols[2]||'').trim();
-      meta[file]={headset, sampleT};
+      const headset=cols[0].trim();
+      const file   =(cols[1]||'').trim().toLowerCase();   // case-insensitive
+      const sampleT=(cols[2]||'').trim();
+      if(file) meta[file]={headset, sampleT};
     });
   }catch(e){console.warn('Sheet fetch failed',e);}
 
-  /* --- 2. fetch audio list --- */
+  /* --- 2. get audio list from GitHub --- */
   const api=`https://api.github.com/repos/${owner}/${repo}/contents/audio?ref=${branch}`;
   let files=await fetch(api).then(r=>r.json()).catch(()=>[]);
   files=files.filter(f=>f.type==='file'&&/\.(mp3|wav)$/i.test(f.name))
              .sort(()=>Math.random()-0.5);
 
-  /* --- 3. build players and buttons --- */
+  /* --- 3. build players & buttons --- */
   const area=document.getElementById('playerArea');
   area.innerHTML='';
-  let selected='';                       // store clip letter
+  let selected='';
+
   files.forEach((f,i)=>{
     const clipID=String.fromCharCode(65+i);
-    const data=meta[f.name]||{headset:'Unknown',sampleT:''};
+    const data  =meta[f.name.toLowerCase()]||{headset:'Unknown',sampleT:''};
 
     area.insertAdjacentHTML('beforeend',`
       <h3>Clip ${clipID} – ${data.headset}</h3>
@@ -66,7 +69,7 @@
       </button>`);
   });
 
-  /* --- 4. handle clip selection --- */
+  /* --- 4. choose favourite --- */
   document.querySelectorAll('.choice').forEach(btn=>{
     btn.onclick=()=>{
       document.querySelectorAll('.choice').forEach(b=>b.classList.remove('selected'));
@@ -80,16 +83,17 @@
   document.getElementById('submitBtn').onclick=()=>{
     if(!selected){alert('Pick a clip first');return;}
     const btn=document.getElementById('btn-'+selected);
-    const headset=btn.dataset.headset, sample=btn.dataset.sample;
+    const headset=btn.dataset.headset;
+    const sample =btn.dataset.sample;
 
+    /* send only the headset name (plus type if you ever add a second form field) */
     const fd=new FormData();
-    fd.append(entryID,`Clip ${selected}|${headset}|${sample}`);
+    fd.append(entryID, headset);
     fetch(formURL,{method:'POST',mode:'no-cors',body:fd});
 
-    console.log(`Vote → Clip ${selected} | ${headset} | ${sample}`);
+    console.log(`Vote → ${headset} (${selected})`);
     document.getElementById('thanks').innerHTML=
-      `Thanks! You chose <strong>Clip ${selected}</strong><br>Headset: ${headset}`+
-      (sample?`<br>Type: ${sample}`:'');
+      `Thanks! You chose <strong>${headset}</strong>`;
     document.getElementById('thanks').style.display='block';
     document.getElementById('submitBtn').style.display='none';
   };
