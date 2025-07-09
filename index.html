@@ -1,6 +1,5 @@
 <!doctype html>
 <meta charset="utf-8">
-console.table(meta);            //  ←-- temporary debug
 <title>Headset Listening Test</title>
 <style>
  body {font-family: system-ui, sans-serif; max-width:40rem; margin:2rem auto;}
@@ -43,6 +42,8 @@ console.table(meta);            //  ←-- temporary debug
       if(file) meta[file]={headset, sampleT};
     });
   }catch(e){console.warn('Sheet fetch failed',e);}
+
+  console.table(meta);            //  ←-- temporary debug
 
   /* --- 2. get audio list from GitHub --- */
   const api=`https://api.github.com/repos/${owner}/${repo}/contents/audio?ref=${branch}`;
