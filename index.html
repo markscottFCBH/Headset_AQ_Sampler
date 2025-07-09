@@ -1,33 +1,85 @@
 <!doctype html>
 <meta charset="utf-8">
 <title>Headset Listening Test</title>
-<h2>Which headset clip sounds best?</h2>
+<style>
+ body {font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto;}
+ h1 {text-align:center;}
+ audio {width:100%; margin: .5rem 0 1rem;}
+ .choice {display:block; width:100%; padding:1rem; font-size:1.2rem;
+          margin:.75rem 0; background:#0074D9; color:#fff; border:0; border-radius:.5rem;}
+ .choice:hover {background:#005EA6; cursor:pointer;}
+ #thanks {padding:1rem; background:#2ECC40; color:#fff; display:none; text-align:center;}
+</style>
 
-<p>Put on headphones.  Click each play button, listen to the whole 15-second clip, then choose your favourite.</p>
+<h1>Which headset clip sounds best?</h1>
+<p>Put on headphones, play every clip, then click the button for the one you prefer.</p>
 
-<form id="voteForm">
-  <div>
-    <h3>Clip A</h3>
-    <audio controls src="audio/Recording Test - Desk (volume 100).wav"></audio><br>
-    <label><input type="radio" name="fav" value="A"> I prefer Clip A</label>
-  </div><hr>
+<div id="playerArea">Loading clips…</div>
 
-  <div>
-    <h3>Clip B</h3>
-    <audio controls src="audio/Recording Test - Desk (disabled audio enhancements).wav"></audio><br>
-    <label><input type="radio" name="fav" value="B"> I prefer Clip B</label>
-  </div><hr>
-
-  <!-- duplicate the block above for Clip C, D… -->
-
-  <button type="button" onclick="submitVote()">Submit</button>
-</form>
+<!-- results / thanks -->
+<div id="thanks">Thanks for voting!</div>
 
 <script>
-function submitVote() {
-  const choice = document.querySelector('input[name="fav"]:checked');
-  if (!choice) { alert('Please pick a clip first!'); return; }
-  alert('Thanks! You chose Clip ' + choice.value +
-        '. (Exporting results is DIY: copy this pop-up or the dev-console.)');
+(async () => {
+  /* ---- 1.  Fetch file list from GitHub API ---- */
+  const owner  = 'markscottFCBH';                 // CHANGE if you fork
+  const repo   = 'Headset_AQ_Sampler';
+  const branch = 'main';                          // or 'master' etc.
+  const apiURL = `https://api.github.com/repos/${owner}/${repo}/contents/audio?ref=${branch}`;
+
+  let files = await fetch(apiURL).then(r => r.json())
+               .catch(() => { document.getElementById('playerArea').textContent =
+                               'Error fetching file list.'; });
+
+  /* guard if API hit the low unauthenticated rate-limit */
+  if (!Array.isArray(files)) {
+      document.getElementById('playerArea')
+              .textContent = 'GitHub API limit reached—try again in a few minutes.'; return;
+  }
+
+  /* ---- 2.  Keep only .mp3 / .wav files, randomise order ---- */
+  files = files
+          .filter(f => f.type === 'file' && /\.(mp3|wav)$/i.test(f.name))
+          .sort(() => Math.random() - 0.5);                 // simple shuffle
+
+  /* ---- 3.  Build players ---- */
+  const area = document.getElementById('playerArea');
+  area.innerHTML = '';                                     // clear “loading”
+
+  files.forEach((f, idx) => {
+      const clipID = String.fromCharCode(65 + idx);        // A, B, C…
+
+      // player
+      const h3 = document.createElement('h3');
+      h3.textContent = `Clip ${clipID}`;
+      area.appendChild(h3);
+
+      const audio = document.createElement('audio');
+      audio.controls = true;
+      audio.src = f.download_url;                          // raw URL
+      area.appendChild(audio);
+
+      area.appendChild(document.createElement('br'));
+  });
+
+  /* ---- 4.  Big buttons BELOW all players ---- */
+  const btnWrap = document.createElement('div');
+  files.forEach((f, idx) => {
+      const clipID = String.fromCharCode(65 + idx);
+      const btn = document.createElement('button');
+      btn.className = 'choice';
+      btn.textContent = `I prefer Clip ${clipID}`;
+      btn.onclick = () => vote(clipID);
+      btnWrap.appendChild(btn);
+  });
+  area.appendChild(btnWrap);
+
+})();
+
+/* ---- 5.  Very simple “vote” handler ---- */
+function vote(id){
+   document.getElementById('thanks').style.display = 'block';
+   console.log('User voted for clip', id);
+   /* For a real study, POST id to a Google Form, Airtable, etc. */
 }
 </script>
