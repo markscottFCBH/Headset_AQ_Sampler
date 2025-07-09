@@ -2,118 +2,96 @@
 <meta charset="utf-8">
 <title>Headset Listening Test</title>
 <style>
- body {font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto;}
+ body {font-family: system-ui, sans-serif; max-width:40rem; margin:2rem auto;}
  h1  {text-align:center;}
- audio {width:100%; margin:.5rem 0 1rem;}
- .choice {display:block; width:100%; padding:1rem; font-size:1.2rem;
-          margin:.75rem 0; background:#0074D9; color:#fff; border:0; border-radius:.5rem;}
- .choice:hover {background:#005EA6; cursor:pointer;}
- #thanks {padding:1rem; background:#2ECC40; color:#fff; display:none; text-align:center;}
+ audio{width:100%; margin:.5rem 0 1rem;}
+ .choice{display:block; width:100%; padding:1rem; font-size:1.2rem;
+         margin:.6rem 0; background:#0074D9; color:#fff; border:0; border-radius:.5rem;}
+ .choice:hover{background:#005EA6; cursor:pointer;}
+ .choice.selected{background:#005EA6;}
+ #submitBtn{display:none; width:100%; padding:1rem; font-size:1.2rem;
+            background:#2ECC40; color:#fff; border:0; border-radius:.5rem;}
+ #thanks{padding:1rem; background:#2ECC40; color:#fff; display:none; text-align:center;}
 </style>
 
 <h1>Which headset clip sounds best?</h1>
-<p>Put on headphones, play every clip, then click the button for the one you prefer.</p>
+<p>Put on headphones, play every clip, click the blue button for the clip you prefer, <br>and then press <strong>Submit Vote</strong>.</p>
 
 <div id="playerArea">Loading clips…</div>
+<button id="submitBtn">Submit Vote</button>
 <div id="thanks">Thanks for voting!</div>
 
 <script>
 (async () => {
-  /* 0.  URLs you maintain */
-  const sheetCSV =
-    'https://docs.google.com/spreadsheets/d/e/2PACX-1vSMW0ygEf7KOBgnMmDaW7v_qbz9pwsa92-x4gAmhQBeahM7PG5bnbZ28fXodq58KK0R3u6cTudXFOcO/pub?output=csv';
+  /* === CONFIG === */
+  const sheetCSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSMW0ygEf7KOBgnMmDaW7v_qbz9pwsa92-x4gAmhQBeahM7PG5bnbZ28fXodq58KK0R3u6cTudXFOcO/pub?output=csv';
+  const formURL  = 'https://docs.google.com/forms/d/e/1FAIpQLScrqxcym-drBF6IwBBMkV5JZbSdQgJd7teYI5rMDnKpCwauiA/formResponse';
+  const entryID  = 'entry.1307162419';
+  const owner='markscottFCBH', repo='Headset_AQ_Sampler', branch='main';
 
-  const formURL   =
-    'https://docs.google.com/forms/d/e/1FAIpQLScrqxcym-drBF6IwBBMkV5JZbSdQgJd7teYI5rMDnKpCwauiA/formResponse';
-  const entryID   = 'entry.1307162419';     // “Which clip did you prefer?” field
-
-  /* ---- 1.  Build { file : {headset, sampleT} } from the CSV ---- */
-  let meta = {};
-  try {
-    const csv = await fetch(sheetCSV).then(r => r.text());
-    csv.trim().split('\n').forEach(row => {
-      const cols = row.split(/,(.+)/);                // split once (Headset , rest)
-      if (cols.length < 2) return;
-      const headset = cols[0].trim();
-      const rest    = cols[1].split(',');             // [File , Type?]
-      const file    = (rest[0] || '').trim();
-      const sampleT = (rest[1] || '').trim();
-      if (!/\.(mp3|wav)$/i.test(file)) return;        // skip header/blank rows
-      meta[file] = { headset, sampleT };
+  /* --- 1. parse metadata sheet (skip header row) --- */
+  let meta={};
+  try{
+    const csv=await fetch(sheetCSV).then(r=>r.text());
+    csv.trim().split('\n').slice(1).forEach(row=>{
+      const cols=row.split(',');
+      if(cols.length<2)return;
+      const headset=cols[0].trim(), file=cols[1].trim(), sampleT=(cols[2]||'').trim();
+      meta[file]={headset, sampleT};
     });
-  } catch (e) { console.warn('metadata sheet fetch failed', e); }
+  }catch(e){console.warn('Sheet fetch failed',e);}
 
-  /* ---- 2.  Get file list from GitHub ---- */
-  const owner  = 'markscottFCBH';
-  const repo   = 'Headset_AQ_Sampler';
-  const branch = 'main';
-  const apiURL =
-    `https://api.github.com/repos/${owner}/${repo}/contents/audio?ref=${branch}`;
+  /* --- 2. fetch audio list --- */
+  const api=`https://api.github.com/repos/${owner}/${repo}/contents/audio?ref=${branch}`;
+  let files=await fetch(api).then(r=>r.json()).catch(()=>[]);
+  files=files.filter(f=>f.type==='file'&&/\.(mp3|wav)$/i.test(f.name))
+             .sort(()=>Math.random()-0.5);
 
-  let files = await fetch(apiURL).then(r => r.json())
-                .catch(() => { document.getElementById('playerArea').textContent =
-                                'Error fetching file list.'; });
+  /* --- 3. build players and buttons --- */
+  const area=document.getElementById('playerArea');
+  area.innerHTML='';
+  let selected='';                       // store clip letter
+  files.forEach((f,i)=>{
+    const clipID=String.fromCharCode(65+i);
+    const data=meta[f.name]||{headset:'Unknown',sampleT:''};
 
-  if (!Array.isArray(files)) {
-    document.getElementById('playerArea').textContent =
-      'GitHub API limit reached—try again later.'; return;
-  }
-
-  files = files
-          .filter(f => f.type === 'file' && /\.(mp3|wav)$/i.test(f.name))
-          .sort(() => Math.random() - 0.5);          // shuffle
-
-  /* ---- 3.  Build players ---- */
-  const area = document.getElementById('playerArea');
-  area.innerHTML = '';
-
-  files.forEach((f, idx) => {
-    const clipID = String.fromCharCode(65 + idx);    // A, B, C…
-    const data   = meta[f.name] || { headset:'Unknown', sampleT:'' };
-
-    const h3 = document.createElement('h3');
-    h3.textContent = `Clip ${clipID} – ${data.headset}`;
-    area.appendChild(h3);
-
-    const audio = document.createElement('audio');
-    audio.controls = true;
-    audio.src = f.download_url;
-    audio.dataset.headset = data.headset;            // store for vote()
-    audio.dataset.sampleT = data.sampleT;
-    area.appendChild(audio);
-    area.appendChild(document.createElement('br'));
+    area.insertAdjacentHTML('beforeend',`
+      <h3>Clip ${clipID} – ${data.headset}</h3>
+      <audio controls src="${f.download_url}"></audio><br>
+      <button class="choice" id="btn-${clipID}"
+              data-clip="${clipID}"
+              data-headset="${data.headset}"
+              data-sample="${data.sampleT}">
+        I prefer Clip ${clipID}
+      </button>`);
   });
 
-  /* ---- 4.  Big buttons below all players ---- */
-  const btnWrap = document.createElement('div');
-  files.forEach((_, idx) => {
-    const clipID = String.fromCharCode(65 + idx);
-    const btn = document.createElement('button');
-    btn.className = 'choice';
-    btn.textContent = `I prefer Clip ${clipID}`;
-    btn.onclick = () => vote(clipID);
-    btnWrap.appendChild(btn);
+  /* --- 4. handle clip selection --- */
+  document.querySelectorAll('.choice').forEach(btn=>{
+    btn.onclick=()=>{
+      document.querySelectorAll('.choice').forEach(b=>b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selected=btn.dataset.clip;
+      document.getElementById('submitBtn').style.display='block';
+    };
   });
-  area.appendChild(btnWrap);
 
-  /* ---- 5.  Vote handler ---- */
-  function vote(id) {
-    const idx     = id.charCodeAt(0) - 65;
-    const audio   = document.querySelectorAll('audio')[idx];
-    const headset = audio.dataset.headset;
-    const sample  = audio.dataset.sampleT;
+  /* --- 5. submit vote --- */
+  document.getElementById('submitBtn').onclick=()=>{
+    if(!selected){alert('Pick a clip first');return;}
+    const btn=document.getElementById('btn-'+selected);
+    const headset=btn.dataset.headset, sample=btn.dataset.sample;
 
-    /* send to Form */
-    const fd = new FormData();
-    fd.append(entryID, `Clip ${id} | ${headset} | ${sample}`);
-    fetch(formURL, { method:'POST', mode:'no-cors', body: fd });
+    const fd=new FormData();
+    fd.append(entryID,`Clip ${selected}|${headset}|${sample}`);
+    fetch(formURL,{method:'POST',mode:'no-cors',body:fd});
 
-    console.log(`Vote → Clip ${id} | ${headset} | ${sample}`);
-    document.getElementById('thanks').innerHTML =
-      `Thanks! You chose <strong>Clip ${id}</strong><br>` +
-      `Headset: ${headset}` +
-      (sample ? `<br>Type: ${sample}` : '');
-    document.getElementById('thanks').style.display = 'block';
-  }
+    console.log(`Vote → Clip ${selected} | ${headset} | ${sample}`);
+    document.getElementById('thanks').innerHTML=
+      `Thanks! You chose <strong>Clip ${selected}</strong><br>Headset: ${headset}`+
+      (sample?`<br>Type: ${sample}`:'');
+    document.getElementById('thanks').style.display='block';
+    document.getElementById('submitBtn').style.display='none';
+  };
 })();
 </script>
