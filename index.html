@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Headset Listening Test</title>
+<h2>Which headset clip sounds best?</h2>
+
+<p>Put on headphones.  Click each play button, listen to the whole 15-second clip, then choose your favourite.</p>
+
+<form id="voteForm">
+  <div>
+    <h3>Clip A</h3>
+    <audio controls src="audio/Recording Test - Desk (volume 100).wav"></audio><br>
+    <label><input type="radio" name="fav" value="A"> I prefer Clip A</label>
+  </div><hr>
+
+  <div>
+    <h3>Clip B</h3>
+    <audio controls src="audio/Recording Test - Desk (disabled audio enhancements).wav"></audio><br>
+    <label><input type="radio" name="fav" value="B"> I prefer Clip B</label>
+  </div><hr>
+
+  <!-- duplicate the block above for Clip C, D… -->
+
+  <button type="button" onclick="submitVote()">Submit</button>
+</form>
+
+<script>
+function submitVote() {
+  const choice = document.querySelector('input[name="fav"]:checked');
+  if (!choice) { alert('Please pick a clip first!'); return; }
+  alert('Thanks! You chose Clip ' + choice.value +
+        '. (Exporting results is DIY: copy this pop-up or the dev-console.)');
+}
+</script>
